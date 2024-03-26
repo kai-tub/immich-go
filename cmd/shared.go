@@ -106,11 +106,22 @@ func (app *SharedFlags) Start(ctx context.Context) error {
 	// If the client isn't yet initialized
 	if app.Immich == nil {
 		conf, err := configuration.Read(app.ConfigurationFile)
-		confExist := err == nil
-		if confExist && app.Server == "" && app.Key == "" && app.API == "" {
-			app.Server = conf.ServerURL
-			app.Key = conf.APIKey
-			app.API = conf.APIURL
+		confExists := err == nil
+		updateConf := !confExists
+		// cmd line args take precendence and will update config
+		if confExists {
+			if app.Server != "" || app.Key != "" || app.API != "" {
+				updateConf = true
+			}
+			if app.Server == "" {
+				app.Server = conf.ServerURL
+			}
+			if app.Key == "" {
+				app.Key = conf.APIKey
+			}
+			if app.API == "" {
+				app.API = conf.APIURL
+			}
 		}
 
 		switch {
@@ -124,15 +135,17 @@ func (app *SharedFlags) Start(ctx context.Context) error {
 			return joinedErr
 		}
 
-		// Connection details are saved into the configuration file
-		conf.ServerURL = app.Server
-		conf.APIKey = app.Key
-		conf.APIURL = app.API
-		err = conf.Write(app.ConfigurationFile)
-		if err != nil {
-			err = fmt.Errorf("can't write into the configuration file: %w", err)
-			joinedErr = errors.Join(joinedErr, err)
-			return joinedErr
+		if updateConf {
+			// Connection details are saved into the configuration file
+			conf.ServerURL = app.Server
+			conf.APIKey = app.Key
+			conf.APIURL = app.API
+			err = conf.Write(app.ConfigurationFile)
+			if err != nil {
+				err = fmt.Errorf("can't write into the configuration file: %w", err)
+				joinedErr = errors.Join(joinedErr, err)
+				return joinedErr
+			}
 		}
 
 		app.Immich, err = immich.NewImmichClient(app.Server, app.Key, app.SkipSSL)
